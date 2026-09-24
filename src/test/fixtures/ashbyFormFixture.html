@@ -1,0 +1,93 @@
+<div class="ashby-application-form" id="ashby-form-root">
+  <!-- Resume File Upload -->
+  <div class="ashby-application-form-field-entry">
+    <label for="resume-input">Resume / CV *</label>
+    <input id="resume-input" type="file" name="resume" accept=".pdf,.doc,.docx" />
+  </div>
+
+  <!-- First Name -->
+  <div class="ashby-application-form-field-entry">
+    <label for="first-name-input">First Name *</label>
+    <input id="first-name-input" type="text" autocomplete="given-name" name="firstName" />
+  </div>
+
+  <!-- Last Name -->
+  <div class="ashby-application-form-field-entry">
+    <label for="last-name-input">Last Name *</label>
+    <input id="last-name-input" type="text" autocomplete="family-name" name="lastName" />
+  </div>
+
+  <!-- Email -->
+  <div class="ashby-application-form-field-entry">
+    <label for="email-input">Email *</label>
+    <input id="email-input" type="email" autocomplete="email" name="email" />
+  </div>
+
+  <!-- Phone -->
+  <div class="ashby-application-form-field-entry">
+    <label for="phone-input">Phone Number</label>
+    <input id="phone-input" type="tel" autocomplete="tel" name="phone" />
+  </div>
+
+  <!-- City / Location -->
+  <div class="ashby-application-form-field-entry">
+    <label for="location-input">Current Location</label>
+    <input id="location-input" type="text" name="location" placeholder="City, State" />
+  </div>
+
+  <!-- LinkedIn -->
+  <div class="ashby-application-form-field-entry">
+    <label for="linkedin-input">LinkedIn Profile URL</label>
+    <input id="linkedin-input" type="url" name="linkedin" />
+  </div>
+
+  <!-- GitHub -->
+  <div class="ashby-application-form-field-entry">
+    <label for="github-input">GitHub URL</label>
+    <input id="github-input" type="url" name="github" />
+  </div>
+
+  <!-- Portfolio -->
+  <div class="ashby-application-form-field-entry">
+    <label for="portfolio-input">Portfolio Website</label>
+    <input id="portfolio-input" type="url" name="portfolio" />
+  </div>
+
+  <!-- Work Authorization Radio Group -->
+  <div class="ashby-application-form-field-entry" id="auth-entry">
+    <label>Are you legally authorized to work in the United States? *</label>
+    <div>
+      <label>
+        <input type="radio" name="authorized_us" value="yes" id="auth-yes" /> Yes
+      </label>
+      <label>
+        <input type="radio" name="authorized_us" value="no" id="auth-no" /> No
+      </label>
+    </div>
+  </div>
+
+  <!-- Visa Sponsorship Radio Group -->
+  <div class="ashby-application-form-field-entry" id="sponsorship-entry">
+    <label>Will you now or in the future require visa sponsorship? *</label>
+    <div>
+      <label>
+        <input type="radio" name="visa_sponsorship" value="yes" id="sponsor-yes" /> Yes
+      </label>
+      <label>
+        <input type="radio" name="visa_sponsorship" value="no" id="sponsor-no" /> No
+      </label>
+    </div>
+  </div>
+
+  <!-- Notice Period -->
+  <div class="ashby-application-form-field-entry">
+    <label for="notice-input">Notice Period</label>
+    <input id="notice-input" type="text" name="noticePeriod" />
+  </div>
+
+  <!-- Custom Question: Salary Expectations -->
+  <div class="ashby-application-form-field-entry">
+    <label for="salary-input">What are your desired salary expectations?</label>
+    <input id="salary-input" type="text" name="salaryExpectations" />
+  </div>
+</div>
