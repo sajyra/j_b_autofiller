@@ -1,0 +1,1 @@
+chrome.runtime.onInstalled.addListener(e=>{e.reason==="install"&&(console.log("[Instapp] Extension installed. Opening dashboard onboarding..."),chrome.runtime.openOptionsPage())});chrome.runtime.onMessage.addListener((e,o,n)=>{if(e.action==="OPEN_OPTIONS_PAGE")return chrome.runtime.openOptionsPage(),n({success:!0}),!0});
