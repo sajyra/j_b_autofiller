@@ -116,6 +116,31 @@ export async function selectWorkdaySearchPrompt(
       await new Promise((r) => setTimeout(r, 50));
     }
 
+    // If search filtered out all results, clear search box to restore full options list
+    if (!bestOption) {
+      setInputValue(searchInput, '');
+      searchInput.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true }));
+      searchInput.dispatchEvent(new KeyboardEvent('keyup', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true }));
+      await new Promise((r) => setTimeout(r, 300));
+      options = Array.from(document.querySelectorAll<HTMLElement>(OPTION_SELECTORS)).filter(
+        (el) =>
+          (el.offsetParent !== null || !!el.textContent?.trim()) &&
+          !el.closest('header, nav, [data-automation-id*="header" i], [data-automation-id*="nav" i], [data-automation-id="selectedItemList"], [data-automation-id="selectedItem"]')
+      );
+      if (options.length > 0) {
+        const match = findBestMatchingOption(
+          options,
+          (opt) => opt.getAttribute('data-automation-label') || opt.getAttribute('aria-label') || opt.textContent || '',
+          targetValue,
+          semantic,
+          30
+        );
+        if (match.best) {
+          bestOption = match.best;
+        }
+      }
+    }
+
     if (bestOption) {
         const radioTarget = bestOption.querySelector<HTMLElement>('input[type="radio"], [data-automation-id="radioBtn"]');
         const leafTarget = bestOption.querySelector<HTMLElement>('[data-automation-id="promptLeafNode"]');
@@ -245,6 +270,19 @@ export async function selectWorkdayComboboxOption(
         (el.offsetParent !== null || !!el.textContent?.trim()) &&
         !el.closest('header, nav, [data-automation-id*="header" i], [data-automation-id*="nav" i]')
     );
+
+    // If search filtered out all results, clear search box to restore full options list
+    if (options.length === 0) {
+      setInputValue(searchInput, '');
+      searchInput.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', bubbles: true }));
+      searchInput.dispatchEvent(new KeyboardEvent('keyup', { key: 'Enter', code: 'Enter', bubbles: true }));
+      await new Promise((resolve) => setTimeout(resolve, 300));
+      options = Array.from(document.querySelectorAll<HTMLElement>(OPTION_SELECTORS)).filter(
+        (el) =>
+          (el.offsetParent !== null || !!el.textContent?.trim()) &&
+          !el.closest('header, nav, [data-automation-id*="header" i], [data-automation-id*="nav" i]')
+      );
+    }
   }
 
   // 7. Match and select the best option

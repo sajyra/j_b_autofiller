@@ -65,6 +65,59 @@ describe('semanticMatcher', () => {
       );
       expect(best).not.toBe('East Asian');
     });
+
+    it('strictly does NOT pick American Indian for South Asian / Indian candidate', () => {
+      const options = [
+        'American Indian or Alaska Native (Not Hispanic or Latino)',
+        'Asian (Not Hispanic or Latino)',
+        'Black or African American (Not Hispanic or Latino)',
+        'Native Hawaiian or Other Pacific Islander (Not Hispanic or Latino)',
+        'White (Not Hispanic or Latino)',
+        'Two or More Races (Not Hispanic or Latino)',
+        'I decline to identify my race',
+      ];
+
+      const { best } = findBestMatchingOption(
+        options,
+        (opt) => opt,
+        'south-asian',
+        'eeo_race'
+      );
+
+      expect(best).toBe('Asian (Not Hispanic or Latino)');
+      expect(best).not.toBe('American Indian or Alaska Native (Not Hispanic or Latino)');
+
+      const scoreAmericanIndian = scoreChoiceMatch(
+        'American Indian or Alaska Native (Not Hispanic or Latino)',
+        'south-asian',
+        'eeo_race'
+      );
+      expect(scoreAmericanIndian).toBe(-100);
+
+      const scoreAsian = scoreChoiceMatch(
+        'Asian (Not Hispanic or Latino)',
+        'south-asian',
+        'eeo_race'
+      );
+      expect(scoreAsian).toBe(95);
+    });
+
+    it('picks American Indian when candidate explicitly selected native', () => {
+      const options = [
+        'American Indian or Alaska Native (Not Hispanic or Latino)',
+        'Asian (Not Hispanic or Latino)',
+        'White (Not Hispanic or Latino)',
+      ];
+
+      const { best } = findBestMatchingOption(
+        options,
+        (opt) => opt,
+        'native',
+        'eeo_race'
+      );
+
+      expect(best).toBe('American Indian or Alaska Native (Not Hispanic or Latino)');
+    });
   });
 
   describe('Gender semantic variations', () => {

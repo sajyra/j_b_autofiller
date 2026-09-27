@@ -99,24 +99,43 @@ export function scoreChoiceMatch(
 
   // 2. Race / Ethnicity semantics
   if (semantic === 'eeo_race') {
-    // Handling South Asian
-    if (target === 'south-asian' || target === 'south asian' || target === 'asian') {
-      // Rule 1: NEVER match East Asian or Chinese if candidate is South Asian
-      if (EAST_ASIAN_KEYWORDS.some((kw) => opt.includes(kw))) {
-        return -100;
-      }
-      if (SOUTHEAST_ASIAN_KEYWORDS.some((kw) => opt.includes(kw))) {
+    // Universal exclusion: Unless target explicitly requests Native American / American Indian,
+    // NEVER match 'American Indian' or 'Alaska Native' or 'Native American'
+    const isTargetNative = target === 'native' || target.includes('american indian') || target.includes('alaska native');
+    if (!isTargetNative && (opt.includes('american indian') || opt.includes('alaska native') || opt.includes('native american'))) {
+      return -100;
+    }
+
+    // Handling South Asian & Asian
+    if (target === 'south-asian' || target === 'south asian' || target === 'asian' || target === 'asian indian' || target === 'indian') {
+      // Rule 1: Strictly NEVER match American Indian or Alaska Native
+      if (opt.includes('american indian') || opt.includes('alaska native') || opt.includes('native american')) {
         return -100;
       }
 
-      // Rule 2: High priority for specific South Asian choices
+      // Rule 2: NEVER match East Asian or Chinese if candidate is South Asian
+      if (target !== 'asian') {
+        if (EAST_ASIAN_KEYWORDS.some((kw) => opt.includes(kw))) {
+          return -100;
+        }
+      }
+
+      // Rule 3: High priority for specific South Asian choices
       if (SOUTH_ASIAN_SPECIFIC_KEYWORDS.some((kw) => opt.includes(kw))) {
         return 98;
       }
 
-      // Rule 3: High priority for generic "Asian" or "Asian (Not Hispanic or Latino)"
-      if (opt === 'asian' || opt.startsWith('asian ') || opt.includes('asian (not hispanic')) {
-        return 85;
+      // Rule 4: Match generic "Asian" or "Asian (Not Hispanic or Latino)" or "Asian (United States of America)"
+      if (
+        opt === 'asian' ||
+        opt.startsWith('asian ') ||
+        opt.startsWith('asian -') ||
+        opt.startsWith('asian /') ||
+        opt.includes('asian (not hispanic') ||
+        opt.includes('asian (united states') ||
+        /\basian\b/i.test(opt)
+      ) {
+        return 95;
       }
     }
 
@@ -458,6 +477,12 @@ export function scoreChoiceMatch(
 
   // Universal rule: If target does not specify "minor outlying", NEVER match "minor outlying islands"
   if (!target.includes('minor outlying') && (opt.includes('minor outlying') || opt.includes('outlying island'))) {
+    return -100;
+  }
+
+  // Universal rule: If target does not specify Native American / American Indian, NEVER match "American Indian" or "Alaska Native"
+  const isTargetNativeUniversal = target === 'native' || target.includes('american indian') || target.includes('alaska native');
+  if (!isTargetNativeUniversal && (opt.includes('american indian') || opt.includes('alaska native') || opt.includes('native american'))) {
     return -100;
   }
 

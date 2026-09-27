@@ -1916,10 +1916,37 @@ async function fillDisclosuresStep(
   if (raceTrigger && !processed.has(raceTrigger)) {
     processed.add(raceTrigger);
     report.totalFieldsFound++;
-    const targetVal = profile.eeo.race || 'asian';
-    const success = await selectWorkdayComboboxOption(raceTrigger, targetVal, 'eeo_race');
-    if (success) report.fieldsFilled++;
-    report.details.push({ semantic: 'eeo_race', label: 'Race / Ethnicity', success });
+    const rawRace = (profile.eeo.race || 'asian').toLowerCase();
+    // In US Workday EEO dropdowns, South Asian falls under standard "Asian"
+    const targetVal =
+      rawRace === 'south-asian' || rawRace === 'south asian' || rawRace === 'indian' || rawRace === 'asian indian'
+        ? 'Asian'
+        : profile.eeo.race || 'Asian';
+
+    // Support Workday forms that render ethnicity as a group of radio buttons
+    const raceRadios = Array.from(
+      root.querySelectorAll<HTMLInputElement>(
+        'input[type="radio"][name*="ethnicity" i], input[type="radio"][name*="race" i], input[type="radio"][data-automation-id*="race" i]'
+      )
+    );
+    if (raceRadios.length > 0) {
+      raceRadios.forEach((r) => processed.add(r));
+      const { best } = findBestMatchingOption(
+        raceRadios,
+        (r) => getWorkdayElementLabel(r),
+        targetVal,
+        'eeo_race'
+      );
+      if (best) {
+        selectWorkdayRadio(best);
+        report.fieldsFilled++;
+        report.details.push({ semantic: 'eeo_race', label: 'Race / Ethnicity', success: true });
+      }
+    } else {
+      const success = await selectWorkdayComboboxOption(raceTrigger, targetVal, 'eeo_race');
+      if (success) report.fieldsFilled++;
+      report.details.push({ semantic: 'eeo_race', label: 'Race / Ethnicity', success });
+    }
   }
 
   // 4. Veteran Status
