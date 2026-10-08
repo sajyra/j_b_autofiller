@@ -1,7 +1,7 @@
 import { CandidateProfile } from '../../types/profile';
 import { AutofillReport, FieldSemantic } from '../../types/autofill';
 import { classifyField, extractFieldLabel, normalizeText } from '../core/labelMatcher';
-import { setInputValue, setSelectValue, setCheckboxOrRadio, simulateClick } from '../core/eventDispatcher';
+import { setInputValue, setSelectValue, setCheckboxOrRadio, simulateClick, firePointerClick } from '../core/eventDispatcher';
 import { findBestMatchingOption, scoreChoiceMatch, getProfileValueForSemantic } from '../core/semanticMatcher';
 
 /**
@@ -80,14 +80,38 @@ export function getQuestionHeading(element: HTMLElement): string {
  * Checks if a clickable control/button is currently selected/active.
  */
 export function isControlActive(el: HTMLElement): boolean {
+  if (!el) return false;
   if (el.getAttribute('aria-pressed') === 'true') return true;
   if (el.getAttribute('aria-checked') === 'true') return true;
-  if (el.getAttribute('data-state') === 'on' || el.getAttribute('data-state') === 'checked') return true;
+  if (
+    el.getAttribute('data-state') === 'on' ||
+    el.getAttribute('data-state') === 'checked' ||
+    el.getAttribute('data-state') === 'active'
+  ) return true;
+  if (el.getAttribute('data-selected') === 'true' || el.getAttribute('data-active') === 'true') return true;
   if (el.classList.contains('active') || el.classList.contains('selected') || el.classList.contains('checked')) return true;
-  const radio = el.querySelector<HTMLInputElement>('input[type="radio"]');
+
+  // Check parent button or wrapper if el is an inner element
+  const parentBtn = el.closest('button, [role="button"], [role="radio"]');
+  if (parentBtn && parentBtn !== el) {
+    if (parentBtn.getAttribute('aria-pressed') === 'true') return true;
+    if (parentBtn.getAttribute('aria-checked') === 'true') return true;
+    if (
+      parentBtn.getAttribute('data-state') === 'on' ||
+      parentBtn.getAttribute('data-state') === 'checked' ||
+      parentBtn.getAttribute('data-state') === 'active'
+    ) return true;
+    if (parentBtn.classList.contains('active') || parentBtn.classList.contains('selected') || parentBtn.classList.contains('checked')) return true;
+  }
+
+  const radio = el.querySelector<HTMLInputElement>('input[type="radio"], input[type="checkbox"]') ||
+    el.parentElement?.querySelector<HTMLInputElement>('input[type="radio"], input[type="checkbox"]');
   if (radio && radio.checked) return true;
   return false;
 }
+
+// Track buttons already chosen by Instapp to prevent accidental un-toggling during reconciliation
+const instappActivatedButtons = new WeakSet<HTMLElement>();
 
 /**
  * Handles segmented [ Yes | No ] buttons widely used in Ashby for Boolean questions,
@@ -162,9 +186,10 @@ export function handleSegmentedButtons(
 
         const chosenEl = targetChoice === 'yes' ? el : targetChoice === 'no' ? noEl : null;
         if (chosenEl) {
-          if (!isControlActive(chosenEl)) {
+          if (!isControlActive(chosenEl) && !instappActivatedButtons.has(chosenEl)) {
             chosenEl.focus();
-            simulateClick(chosenEl);
+            firePointerClick(chosenEl);
+            instappActivatedButtons.add(chosenEl);
             const innerRadio = chosenEl.querySelector<HTMLInputElement>('input[type="radio"]') ||
               chosenEl.parentElement?.querySelector<HTMLInputElement>('input[type="radio"]');
             if (innerRadio && !innerRadio.checked) {
@@ -256,20 +281,34 @@ export async function handleLocationField(
 ): Promise<boolean> {
   setInputValue(input, locationText);
 
-  // Wait a short tick for Ashby's location search popover to open
-  await new Promise((resolve) => setTimeout(resolve, 350));
+  // Poll for Ashby's location search popover (up to 1200ms)
+  const startTime = Date.now();
+  let matched: HTMLElement | null = null;
+  const target = normalizeText(locationText);
 
-  // Find location suggestion popover items
-  const items = Array.from(
-    document.querySelectorAll<HTMLElement>(
-      '[role="option"], [data-radix-collection-item], ul[role="listbox"] > li, [class*="option"], [class*="menuItem"], [class*="suggestion"]'
-    )
-  );
+  while (Date.now() - startTime < 1200) {
+    await new Promise((resolve) => setTimeout(resolve, 100));
 
-  if (items.length > 0) {
-    const target = normalizeText(locationText);
-    const matched = items.find((item) => normalizeText(item.textContent || '').includes(target)) || items[0];
-    simulateClick(matched);
+    const items = Array.from(
+      document.querySelectorAll<HTMLElement>(
+        '[role="option"], [data-radix-collection-item], ul[role="listbox"] > li, [class*="option"], [class*="menuItem"], [class*="suggestion"]'
+      )
+    ).filter((item) => {
+      if (typeof item.getBoundingClientRect === 'function') {
+        const rect = item.getBoundingClientRect();
+        return rect.width > 0 || rect.height > 0;
+      }
+      return true;
+    });
+
+    if (items.length > 0) {
+      matched = items.find((item) => normalizeText(item.textContent || '').includes(target)) || items[0];
+      break;
+    }
+  }
+
+  if (matched) {
+    firePointerClick(matched);
     return true;
   }
 
@@ -878,8 +917,8 @@ export async function autofillAshby(
 
     if (targetVal) {
       report.totalFieldsFound++;
-      simulateClick(combo);
-      await new Promise((r) => setTimeout(r, 100));
+      firePointerClick(combo);
+      await new Promise((r) => setTimeout(r, 120));
       const options = Array.from(
         document.querySelectorAll<HTMLElement>(
           '[role="option"], [data-radix-collection-item], li[role="treeitem"]'
@@ -887,11 +926,11 @@ export async function autofillAshby(
       );
       const { best } = findBestMatchingOption(options, (opt) => opt.textContent || '', targetVal, semantic, 35);
       if (best) {
-        simulateClick(best);
+        firePointerClick(best);
         report.fieldsFilled++;
         report.details.push({ semantic, label, success: true });
       } else {
-        document.body.click();
+        firePointerClick(document.body);
       }
     }
   }
@@ -902,20 +941,26 @@ export async function autofillAshby(
   // 8. Background MutationObserver Guard Window (3.5 seconds)
   if (typeof MutationObserver !== 'undefined') {
     let timer: any = null;
+    let runsRemaining = 5;
     const targetNode = rootElement instanceof Document ? rootElement.body : rootElement;
     if (targetNode) {
       const observer = new MutationObserver(() => {
+        if (runsRemaining <= 0) {
+          observer.disconnect();
+          return;
+        }
         if (timer) clearTimeout(timer);
         timer = setTimeout(() => {
-          verifyAndReconcileAshby(rootElement, profile);
-        }, 150);
+          if (runsRemaining > 0) {
+            runsRemaining--;
+            verifyAndReconcileAshby(rootElement, profile);
+          }
+        }, 200);
       });
 
       observer.observe(targetNode, {
         childList: true,
         subtree: true,
-        attributes: true,
-        attributeFilter: ['value', 'checked'],
       });
 
       setTimeout(() => {

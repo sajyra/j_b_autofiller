@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { setInputValue, setCheckboxOrRadio, setSelectValue } from '../content/core/eventDispatcher';
+import { setInputValue, setCheckboxOrRadio, setSelectValue, firePointerClick } from '../content/core/eventDispatcher';
 
 describe('eventDispatcher', () => {
   it('dispatches input, change, and blur events on text input', () => {
@@ -54,5 +54,60 @@ describe('eventDispatcher', () => {
     expect(select.value).toBe('opt-yes');
 
     select.remove();
+  });
+
+  it('correctly resets React _valueTracker so React Hook Form detects changes', () => {
+    const input = document.createElement('input');
+    document.body.appendChild(input);
+
+    let trackerValue = '';
+    (input as any)._valueTracker = {
+      getValue: () => trackerValue,
+      setValue: (v: string) => {
+        trackerValue = v;
+      },
+    };
+
+    let reactState = '';
+    (input as any)['__reactProps$test'] = {
+      onChange: (e: any) => {
+        reactState = e.target.value;
+      },
+    };
+
+    setInputValue(input, 'Alex Mercer');
+
+    expect(input.value).toBe('Alex Mercer');
+    expect(reactState).toBe('Alex Mercer');
+
+    input.remove();
+  });
+
+  it('dispatches pointer events and invokes Radix UI / React props in firePointerClick', () => {
+    const button = document.createElement('button');
+    document.body.appendChild(button);
+
+    const pointerDownSpy = vi.fn();
+    const clickSpy = vi.fn();
+    button.addEventListener('pointerdown', pointerDownSpy);
+    button.addEventListener('click', clickSpy);
+
+    let reactClicked = false;
+    (button as any)['__reactProps$test'] = {
+      onClick: () => {
+        reactClicked = true;
+      },
+    };
+
+    setInputValue(button as any, ''); // safe no-op
+    button.focus();
+
+    // Verify pointer click
+    firePointerClick(button);
+
+    expect(clickSpy).toHaveBeenCalled();
+    expect(reactClicked).toBe(true);
+
+    button.remove();
   });
 });
