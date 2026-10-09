@@ -105,8 +105,8 @@ describe('eventDispatcher', () => {
     // Verify pointer click
     firePointerClick(button);
 
-    expect(clickSpy).toHaveBeenCalled();
-    expect(reactClicked).toBe(true);
+    expect(clickSpy).toHaveBeenCalledTimes(1);
+    expect(reactClicked).toBe(false);
 
     button.remove();
   });

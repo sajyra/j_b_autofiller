@@ -83,8 +83,10 @@ export function firePointerClick(element: HTMLElement): void {
     }
   } catch {}
 
-  // React synthetic click / pointer handler invocation (if attached via fiber/props)
+  // React synthetic click fallback: only when the native click could not run,
+  // otherwise toggle-style handlers would fire twice and undo themselves.
   try {
+    if (typeof element.click === 'function') return;
     const keys = Object.keys(element);
     const reactKey = keys.find((k) => k.startsWith('__reactProps$') || k.startsWith('__reactEventHandlers$'));
     if (reactKey) {
@@ -310,82 +312,32 @@ export function setCheckboxOrRadio(element: HTMLElement, checked: boolean): void
     }
   }
 
-  // If element is a button or custom role="radio" / role="checkbox", set ARIA attributes
-  if (element && element !== actualInput) {
-    try {
-      element.setAttribute('aria-checked', String(checked));
-      element.setAttribute('data-state', checked ? 'checked' : 'unchecked');
-    } catch {}
-  }
-
-  // 6. UNCONDITIONALLY dispatch bubbling input and change events on actualInput
+  // Native bubbling events only (React's root listener picks these up).
+  // Do NOT call ancestor React handlers with fake events: that can clobber form state.
   try {
     actualInput.dispatchEvent(new Event('input', { bubbles: true, cancelable: true, composed: true }));
     actualInput.dispatchEvent(new Event('change', { bubbles: true, cancelable: true, composed: true }));
   } catch {}
 
-  if (labelTarget) {
-    try {
-      labelTarget.dispatchEvent(new Event('change', { bubbles: true, cancelable: true, composed: true }));
-    } catch {}
-  }
-
-  // 7. Direct invocation of React synthetic handlers on input & label if attached
-  for (const targetEl of [actualInput, labelTarget]) {
-    if (!targetEl) continue;
-    try {
-      const keys = Object.keys(targetEl);
-      const reactKey = keys.find((k) => k.startsWith('__reactProps$') || k.startsWith('__reactEventHandlers$'));
-      if (reactKey) {
-        const props = (targetEl as any)[reactKey];
-        if (props) {
-          const synthEvent = {
-            target: actualInput,
-            currentTarget: targetEl,
-            bubbles: true,
-            cancelable: true,
-            defaultPrevented: false,
-            persist: () => {},
-            preventDefault: () => {},
-            stopPropagation: () => {},
-            nativeEvent: new Event('change', { bubbles: true, cancelable: true, composed: true }),
-          };
-          if (typeof props.onChange === 'function') props.onChange(synthEvent);
-        }
-      }
-    } catch {}
-  }
-
-  // 8. Invoke Radix UI / custom RadioGroup onValueChange on parent containers
-  let parent = actualInput.closest('[role="radiogroup"], fieldset, [data-radix-collection-item]') || actualInput.parentElement;
-  while (parent && parent !== document.body) {
-    try {
-      const keys = Object.keys(parent);
-      const reactKey = keys.find((k) => k.startsWith('__reactProps$') || k.startsWith('__reactEventHandlers$'));
-      if (reactKey) {
-        const props = (parent as any)[reactKey];
-        if (props) {
-          if (typeof props.onValueChange === 'function') {
-            props.onValueChange(actualInput.value || (checked ? 'true' : 'false'));
-          }
-          if (typeof props.onChange === 'function') {
-            props.onChange({
-              target: actualInput,
-              currentTarget: parent,
-              bubbles: true,
-              cancelable: true,
-              defaultPrevented: false,
-              persist: () => {},
-              preventDefault: () => {},
-              stopPropagation: () => {},
-              nativeEvent: new Event('change', { bubbles: true, cancelable: true, composed: true }),
-            });
-          }
-        }
-      }
-    } catch {}
-    parent = parent.parentElement;
-  }
+  // Direct handler on the input itself only
+  try {
+    const keys = Object.keys(actualInput);
+    const reactKey = keys.find((k) => k.startsWith('__reactProps$') || k.startsWith('__reactEventHandlers$'));
+    const props = reactKey ? (actualInput as any)[reactKey] : null;
+    if (props && typeof props.onChange === 'function') {
+      props.onChange({
+        target: actualInput,
+        currentTarget: actualInput,
+        bubbles: true,
+        cancelable: true,
+        defaultPrevented: false,
+        persist: () => {},
+        preventDefault: () => {},
+        stopPropagation: () => {},
+        nativeEvent: new Event('change'),
+      });
+    }
+  } catch {}
 
   try {
     actualInput.dispatchEvent(new FocusEvent('blur', { bubbles: true, cancelable: true }));

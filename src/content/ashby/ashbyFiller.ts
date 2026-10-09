@@ -233,6 +233,7 @@ export function handleSegmentedButtons(
                   const props = (group as any)[reactKey];
                   if (props && typeof props.onValueChange === 'function') {
                     props.onValueChange(targetChoice);
+                    break;
                   }
                 }
               } catch {}
