@@ -833,6 +833,13 @@ export function verifyAndReconcileAshby(
 
       if (!currentVal.trim() || isAllUpperName || isPlaceholderPhone || isPlaceholderDate) {
         setInputValue(input, expectedVal);
+      } else if (
+        currentVal === expectedVal &&
+        ['full_name', 'first_name', 'last_name', 'email', 'phone'].includes(semantic)
+      ) {
+        // Text is visible but Ashby's form state may have been reset by a re-render.
+        // Re-dispatching with React's value tracker primed re-registers it.
+        setInputValue(input, expectedVal);
       }
     }
   }
@@ -1027,6 +1034,15 @@ export async function autofillAshby(
         observer.disconnect();
       }, 3500);
     }
+  }
+
+  // 9. Delayed passes: Ashby may reset or re-render fields shortly after we fill them
+  for (const delay of [1500, 4000]) {
+    setTimeout(() => {
+      try {
+        verifyAndReconcileAshby(rootElement, profile);
+      } catch {}
+    }, delay);
   }
 
   return report;
