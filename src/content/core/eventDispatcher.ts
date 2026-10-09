@@ -245,13 +245,11 @@ export function setCheckboxOrRadio(element: HTMLElement, checked: boolean): void
       ? element
       : element.querySelector<HTMLInputElement>('input[type="checkbox"], input[type="radio"]') || (element as HTMLInputElement);
 
-  if ((actualInput as HTMLInputElement).checked === checked) return;
-
   try {
     if (typeof actualInput.focus === 'function') actualInput.focus();
   } catch {}
 
-  // Reset React _valueTracker if present on checkbox/radio
+  // 1. Reset React _valueTracker if present on checkbox/radio
   try {
     const tracker = (actualInput as any)._valueTracker;
     if (tracker && typeof tracker.setValue === 'function') {
@@ -259,7 +257,7 @@ export function setCheckboxOrRadio(element: HTMLElement, checked: boolean): void
     }
   } catch {}
 
-  // 1. Determine interactive target: label or input itself
+  // 2. Determine interactive target: label or input itself
   let labelTarget: HTMLElement | null = null;
   if (actualInput.id) {
     try {
@@ -271,20 +269,35 @@ export function setCheckboxOrRadio(element: HTMLElement, checked: boolean): void
     labelTarget = actualInput.closest('label');
   }
 
-  // 2. Click the interactive label if available, otherwise the input
-  if (labelTarget) {
-    firePointerClick(labelTarget);
+  const isCheckbox = actualInput instanceof HTMLInputElement && actualInput.type === 'checkbox';
+
+  if (isCheckbox) {
+    if (actualInput.checked !== checked) {
+      if (labelTarget) {
+        firePointerClick(labelTarget);
+      } else {
+        firePointerClick(actualInput);
+      }
+    }
+    if (actualInput.checked !== checked) {
+      try {
+        const descriptor = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'checked');
+        if (descriptor && descriptor.set) {
+          descriptor.set.call(actualInput, checked);
+        } else {
+          actualInput.checked = checked;
+        }
+      } catch {
+        actualInput.checked = checked;
+      }
+    }
   } else {
-    firePointerClick(actualInput);
-  }
-
-  // 3. If checked state did not update, try clicking actualInput directly
-  if ((actualInput as HTMLInputElement).checked !== checked && labelTarget) {
-    firePointerClick(actualInput);
-  }
-
-  // 4. If still not matching target state, force via prototype setter
-  if ((actualInput as HTMLInputElement).checked !== checked) {
+    // Radio button or custom control
+    if (labelTarget) {
+      firePointerClick(labelTarget);
+    } else {
+      firePointerClick(actualInput);
+    }
     try {
       const descriptor = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'checked');
       if (descriptor && descriptor.set) {
@@ -295,34 +308,84 @@ export function setCheckboxOrRadio(element: HTMLElement, checked: boolean): void
     } catch {
       (actualInput as HTMLInputElement).checked = checked;
     }
+  }
 
+  // If element is a button or custom role="radio" / role="checkbox", set ARIA attributes
+  if (element && element !== actualInput) {
     try {
-      actualInput.dispatchEvent(new Event('input', { bubbles: true, cancelable: true, composed: true }));
-      actualInput.dispatchEvent(new Event('change', { bubbles: true, cancelable: true, composed: true }));
+      element.setAttribute('aria-checked', String(checked));
+      element.setAttribute('data-state', checked ? 'checked' : 'unchecked');
     } catch {}
   }
 
-  // 5. Direct invocation of React synthetic handlers on input if attached
+  // 6. UNCONDITIONALLY dispatch bubbling input and change events on actualInput
   try {
-    const keys = Object.keys(actualInput);
-    const reactKey = keys.find((k) => k.startsWith('__reactProps$') || k.startsWith('__reactEventHandlers$'));
-    if (reactKey) {
-      const props = (actualInput as any)[reactKey];
-      if (props && typeof props.onChange === 'function') {
-        props.onChange({
-          target: actualInput,
-          currentTarget: actualInput,
-          bubbles: true,
-          cancelable: true,
-          defaultPrevented: false,
-          persist: () => {},
-          preventDefault: () => {},
-          stopPropagation: () => {},
-          nativeEvent: new Event('change'),
-        });
-      }
-    }
+    actualInput.dispatchEvent(new Event('input', { bubbles: true, cancelable: true, composed: true }));
+    actualInput.dispatchEvent(new Event('change', { bubbles: true, cancelable: true, composed: true }));
   } catch {}
+
+  if (labelTarget) {
+    try {
+      labelTarget.dispatchEvent(new Event('change', { bubbles: true, cancelable: true, composed: true }));
+    } catch {}
+  }
+
+  // 7. Direct invocation of React synthetic handlers on input & label if attached
+  for (const targetEl of [actualInput, labelTarget]) {
+    if (!targetEl) continue;
+    try {
+      const keys = Object.keys(targetEl);
+      const reactKey = keys.find((k) => k.startsWith('__reactProps$') || k.startsWith('__reactEventHandlers$'));
+      if (reactKey) {
+        const props = (targetEl as any)[reactKey];
+        if (props) {
+          const synthEvent = {
+            target: actualInput,
+            currentTarget: targetEl,
+            bubbles: true,
+            cancelable: true,
+            defaultPrevented: false,
+            persist: () => {},
+            preventDefault: () => {},
+            stopPropagation: () => {},
+            nativeEvent: new Event('change', { bubbles: true, cancelable: true, composed: true }),
+          };
+          if (typeof props.onChange === 'function') props.onChange(synthEvent);
+        }
+      }
+    } catch {}
+  }
+
+  // 8. Invoke Radix UI / custom RadioGroup onValueChange on parent containers
+  let parent = actualInput.closest('[role="radiogroup"], fieldset, [data-radix-collection-item]') || actualInput.parentElement;
+  while (parent && parent !== document.body) {
+    try {
+      const keys = Object.keys(parent);
+      const reactKey = keys.find((k) => k.startsWith('__reactProps$') || k.startsWith('__reactEventHandlers$'));
+      if (reactKey) {
+        const props = (parent as any)[reactKey];
+        if (props) {
+          if (typeof props.onValueChange === 'function') {
+            props.onValueChange(actualInput.value || (checked ? 'true' : 'false'));
+          }
+          if (typeof props.onChange === 'function') {
+            props.onChange({
+              target: actualInput,
+              currentTarget: parent,
+              bubbles: true,
+              cancelable: true,
+              defaultPrevented: false,
+              persist: () => {},
+              preventDefault: () => {},
+              stopPropagation: () => {},
+              nativeEvent: new Event('change', { bubbles: true, cancelable: true, composed: true }),
+            });
+          }
+        }
+      }
+    } catch {}
+    parent = parent.parentElement;
+  }
 
   try {
     actualInput.dispatchEvent(new FocusEvent('blur', { bubbles: true, cancelable: true }));

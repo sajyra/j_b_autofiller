@@ -260,8 +260,6 @@ export async function selectWorkdayComboboxOption(
 
   if (searchInput) {
     setInputValue(searchInput, targetValue);
-    searchInput.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', bubbles: true }));
-    searchInput.dispatchEvent(new KeyboardEvent('keyup', { key: 'Enter', code: 'Enter', bubbles: true }));
     await new Promise((resolve) => setTimeout(resolve, 350));
 
     // Re-query options after search filter
@@ -274,8 +272,6 @@ export async function selectWorkdayComboboxOption(
     // If search filtered out all results, clear search box to restore full options list
     if (options.length === 0) {
       setInputValue(searchInput, '');
-      searchInput.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', bubbles: true }));
-      searchInput.dispatchEvent(new KeyboardEvent('keyup', { key: 'Enter', code: 'Enter', bubbles: true }));
       await new Promise((resolve) => setTimeout(resolve, 300));
       options = Array.from(document.querySelectorAll<HTMLElement>(OPTION_SELECTORS)).filter(
         (el) =>

@@ -137,12 +137,16 @@ export function classifyField(element: HTMLElement, extractedLabel?: string): Fi
   }
 
   // Office Commitment / Anchor Days
-  if (/anchor days|commit.*working.*from.*office|work.*from.*office/i.test(text)) {
+  if (
+    /anchor days|commit.*working.*from.*(office|hq)|work.*from.*(office|hq|foster city|bay area)|in-person.*days|commit.*(office|hq)/i.test(
+      text
+    )
+  ) {
     return 'office_commitment';
   }
 
   // Relocation
-  if (/willing to relocate|relocate.*role|relocating to/i.test(text)) {
+  if (/willing to relocate|relocate.*(role|near|office|hq|area)|relocating to/i.test(text)) {
     return 'relocation';
   }
 

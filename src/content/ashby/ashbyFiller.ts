@@ -104,8 +104,7 @@ export function isControlActive(el: HTMLElement): boolean {
     if (parentBtn.classList.contains('active') || parentBtn.classList.contains('selected') || parentBtn.classList.contains('checked')) return true;
   }
 
-  const radio = el.querySelector<HTMLInputElement>('input[type="radio"], input[type="checkbox"]') ||
-    el.parentElement?.querySelector<HTMLInputElement>('input[type="radio"], input[type="checkbox"]');
+  const radio = el.querySelector<HTMLInputElement>('input[type="radio"], input[type="checkbox"]');
   if (radio && radio.checked) return true;
   return false;
 }
@@ -190,10 +189,54 @@ export function handleSegmentedButtons(
             chosenEl.focus();
             firePointerClick(chosenEl);
             instappActivatedButtons.add(chosenEl);
-            const innerRadio = chosenEl.querySelector<HTMLInputElement>('input[type="radio"]') ||
-              chosenEl.parentElement?.querySelector<HTMLInputElement>('input[type="radio"]');
-            if (innerRadio && !innerRadio.checked) {
+
+            // Also check if chosenEl contains an inner radio
+            const innerRadio = chosenEl.querySelector<HTMLInputElement>('input[type="radio"]');
+            if (innerRadio) {
               setCheckboxOrRadio(innerRadio, true);
+            } else if (container) {
+              // Find matching radio in container if present by value or label
+              const containerRadios = Array.from(container.querySelectorAll<HTMLInputElement>('input[type="radio"]'));
+              const targetRadio = containerRadios.find((r) => {
+                const val = (r.value || '').toLowerCase();
+                const rLabel = extractFieldLabel(r).toLowerCase();
+                return val === targetChoice || rLabel === targetChoice;
+              });
+              if (targetRadio) {
+                setCheckboxOrRadio(targetRadio, true);
+              }
+            }
+
+            const otherEl = chosenEl === el ? noEl : el;
+            if (chosenEl.getAttribute('role') === 'radio' || chosenEl.tagName.toLowerCase() === 'button') {
+              chosenEl.setAttribute('aria-checked', 'true');
+              chosenEl.setAttribute('data-state', 'checked');
+              if (otherEl) {
+                otherEl.setAttribute('aria-checked', 'false');
+                otherEl.setAttribute('data-state', 'unchecked');
+              }
+            }
+
+            // Unconditionally dispatch input and change on chosenEl
+            try {
+              chosenEl.dispatchEvent(new Event('input', { bubbles: true, cancelable: true, composed: true }));
+              chosenEl.dispatchEvent(new Event('change', { bubbles: true, cancelable: true, composed: true }));
+            } catch {}
+
+            // Notify Radix UI / custom RadioGroup / ToggleGroup onValueChange on container
+            let group = chosenEl.closest('[role="radiogroup"], [role="group"]') || chosenEl.parentElement;
+            while (group && group !== document.body) {
+              try {
+                const keys = Object.keys(group);
+                const reactKey = keys.find((k) => k.startsWith('__reactProps$') || k.startsWith('__reactEventHandlers$'));
+                if (reactKey) {
+                  const props = (group as any)[reactKey];
+                  if (props && typeof props.onValueChange === 'function') {
+                    props.onValueChange(targetChoice);
+                  }
+                }
+              } catch {}
+              group = group.parentElement;
             }
           }
           report.fieldsFilled++;
@@ -214,19 +257,42 @@ export function handleAllRadioGroups(
   processedElements: Set<HTMLElement>
 ): void {
   const allRadios = Array.from(rootElement.querySelectorAll<HTMLInputElement>('input[type="radio"]'));
-  if (allRadios.length === 0) return;
+  const standaloneRoleRadios = Array.from(rootElement.querySelectorAll<HTMLElement>('[role="radio"]')).filter(
+    (el) => !el.querySelector('input[type="radio"]') && !el.closest('label')?.querySelector('input[type="radio"]')
+  );
 
-  // Group radios by name attribute or by parent container if name is absent/generic
-  const groups = new Map<string, HTMLInputElement[]>();
-  for (const radio of allRadios) {
-    const name = radio.getAttribute('name') || `parent-${radio.parentElement?.id || radio.parentElement?.className || 'grp'}`;
-    if (!groups.has(name)) {
-      groups.set(name, []);
+  const allRadioCandidates: HTMLElement[] = [...allRadios, ...standaloneRoleRadios];
+  if (allRadioCandidates.length === 0) return;
+
+  // Group radios by name attribute, or by distinct question container
+  const groups: HTMLElement[][] = [];
+  const nameMap = new Map<string, HTMLElement[]>();
+  const containerMap = new Map<HTMLElement, HTMLElement[]>();
+
+  for (const radio of allRadioCandidates) {
+    const name = radio.getAttribute('name');
+    if (name) {
+      if (!nameMap.has(name)) {
+        const arr: HTMLElement[] = [];
+        nameMap.set(name, arr);
+        groups.push(arr);
+      }
+      nameMap.get(name)!.push(radio);
+    } else {
+      const container = (radio.closest(
+        '[role="radiogroup"], fieldset, .ashby-application-form-field-entry, [class*="form-field"], [class*="formField"], [class*="FieldEntry"], [class*="fieldContainer"], [class*="field_entry"]'
+      ) || radio.parentElement || radio) as HTMLElement;
+
+      if (!containerMap.has(container)) {
+        const arr: HTMLElement[] = [];
+        containerMap.set(container, arr);
+        groups.push(arr);
+      }
+      containerMap.get(container)!.push(radio);
     }
-    groups.get(name)!.push(radio);
   }
 
-  for (const [, radios] of groups) {
+  for (const radios of groups) {
     // Check if already processed
     if (radios.some((r) => processedElements.has(r))) continue;
     radios.forEach((r) => processedElements.add(r));
@@ -253,7 +319,7 @@ export function handleAllRadioGroups(
         radios,
         (radio) => {
           const label = extractFieldLabel(radio);
-          const val = radio.value || '';
+          const val = radio.getAttribute('value') || (radio as HTMLInputElement).value || '';
           return `${label} ${val}`;
         },
         targetValue,

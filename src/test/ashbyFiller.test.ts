@@ -193,5 +193,83 @@ describe('ashbyFiller integration tests', () => {
     expect(reactDropCalled).toBe(true);
     expect(report.details[0].label).toBe('Resume / CV Upload');
   });
+
+  it('guarantees Ashby radio group triggers bubbling change events and React synthetic onChange', async () => {
+    document.body.innerHTML = `
+      <div class="ashby-application-form-field-entry">
+        <h3>How many years of relevant professional experience do you have? *</h3>
+        <div role="radiogroup">
+          <label id="lbl-0-1">
+            <input type="radio" name="exp_years" value="0-1 years" id="exp-0-1" />
+            0-1 years
+          </label>
+          <label id="lbl-1-2">
+            <input type="radio" name="exp_years" value="1-2 years" id="exp-1-2" />
+            1-2 years
+          </label>
+          <label id="lbl-3-5">
+            <input type="radio" name="exp_years" value="3-5 years" id="exp-3-5" />
+            3-5 years
+          </label>
+          <label id="lbl-5-plus">
+            <input type="radio" name="exp_years" value="5+ years" id="exp-5-plus" />
+            5+ years
+          </label>
+        </div>
+      </div>
+    `;
+
+    const radio12 = document.getElementById('exp-1-2') as HTMLInputElement;
+    const changeSpy = vi.fn();
+    radio12.addEventListener('change', changeSpy);
+
+    let reactState = '';
+    (radio12 as any)['__reactProps$test'] = {
+      onChange: (e: any) => {
+        reactState = e.target.value;
+      },
+    };
+
+    const expProfile: CandidateProfile = {
+      ...testProfile,
+      experience: {
+        ...testProfile.experience,
+        yearsOfExperience: '1-2',
+      },
+    };
+
+    const report = await autofillAshby(expProfile, document.body);
+    expect(radio12.checked).toBe(true);
+    expect(changeSpy).toHaveBeenCalled();
+    expect(reactState).toBe('1-2 years');
+    expect(report.details.some((d) => /how many years/i.test(d.label) && d.success)).toBe(true);
+  });
+
+  it('guarantees Ashby segmented [Yes | No] buttons register React & Radix UI onValueChange without un-toggling', async () => {
+    document.body.innerHTML = `
+      <div class="ashby-application-form-field-entry">
+        <h3>If not currently in the Bay Area, are you willing to relocate near our Foster City, CA Office? *</h3>
+        <div role="radiogroup" class="segmented-control">
+          <button type="button" role="radio" id="btn-reloc-yes" aria-checked="false">Yes</button>
+          <button type="button" role="radio" id="btn-reloc-no" aria-checked="false">No</button>
+        </div>
+      </div>
+    `;
+
+    const yesBtn = document.getElementById('btn-reloc-yes') as HTMLElement;
+    const group = document.querySelector('[role="radiogroup"]') as HTMLElement;
+    let selectedValue = '';
+
+    (group as any)['__reactProps$test'] = {
+      onValueChange: (val: string) => {
+        selectedValue = val;
+      },
+    };
+
+    const report = await autofillAshby(testProfile, document.body);
+    expect(yesBtn.getAttribute('aria-checked')).toBe('true');
+    expect(selectedValue).toBe('yes');
+    expect(report.details.some((d) => /foster city/i.test(d.label) && d.success)).toBe(true);
+  });
 });
 

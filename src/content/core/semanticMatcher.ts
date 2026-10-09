@@ -358,20 +358,20 @@ export function scoreChoiceMatch(
     }
 
     const optLower = opt.toLowerCase();
+    const targetAbbrLower = targetAbbr.toLowerCase();
     if (
       optLower === targetFull ||
-      optLower === targetAbbr ||
+      optLower === targetAbbrLower ||
       optLower.startsWith(targetFull + ' ') ||
-      optLower.includes(`(${targetAbbr.toUpperCase()})`) ||
-      optLower.includes(`(${targetAbbr})`) ||
-      optLower.includes(` - ${targetAbbr.toUpperCase()}`) ||
-      optLower.includes(`${targetAbbr.toUpperCase()} - `) ||
+      optLower.includes(`(${targetAbbrLower})`) ||
+      optLower.includes(` - ${targetAbbrLower}`) ||
+      optLower.includes(`${targetAbbrLower} - `) ||
       new RegExp(`\\b${targetFull}\\b`, 'i').test(optLower)
     ) {
       return 98;
     }
 
-    if (targetAbbr && new RegExp(`\\b${targetAbbr}\\b`, 'i').test(optLower)) {
+    if (targetAbbrLower && new RegExp(`\\b${targetAbbrLower}\\b`, 'i').test(optLower)) {
       return 95;
     }
   }
@@ -472,6 +472,33 @@ export function scoreChoiceMatch(
         if (opt.includes('canada')) return 70;
         return 85;
       }
+    }
+  }
+
+  // 16. Years of Experience Semantics (handles ranges like "1-2 years", "0-1 years", "3-5 years", "5+ years")
+  if (semantic === 'years_experience') {
+    const targetNums = target.match(/\d+/g)?.map((n) => parseInt(n, 10)) || [];
+    const rangeMatch = opt.match(/(\d+)\s*[-–to]+\s*(\d+)/i);
+    const plusMatch = opt.match(/(\d+)\s*\+/i);
+
+    if (targetNums.length > 0) {
+      const tMin = targetNums[0];
+      const tMax = targetNums.length > 1 ? targetNums[1] : targetNums[0];
+
+      if (rangeMatch) {
+        const oMin = parseInt(rangeMatch[1], 10);
+        const oMax = parseInt(rangeMatch[2], 10);
+        if (tMin <= oMax && tMax >= oMin) {
+          if (tMin === oMin && tMax === oMax) return 100;
+          return 98;
+        }
+      } else if (plusMatch) {
+        const oMin = parseInt(plusMatch[1], 10);
+        if (tMin >= oMin) return 98;
+      }
+    }
+    if (opt.includes(target) || target.includes(opt)) {
+      return 95;
     }
   }
 
@@ -603,8 +630,12 @@ export function getProfileValueForSemantic(profile: CandidateProfile, semantic: 
       return profile.experience.currentCompany;
     case 'current_title':
       return profile.experience.currentTitle;
-    case 'years_experience':
-      return profile.experience.yearsOfExperience;
+    case 'years_experience': {
+      if (profile.experience.yearsOfExperience && profile.experience.yearsOfExperience.trim().length > 0) {
+        return profile.experience.yearsOfExperience;
+      }
+      return '1-2';
+    }
     case 'highest_degree':
       return profile.experience.highestDegree;
     case 'school':
