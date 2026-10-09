@@ -190,21 +190,11 @@ export function handleSegmentedButtons(
             firePointerClick(chosenEl);
             instappActivatedButtons.add(chosenEl);
 
-            // Also check if chosenEl contains an inner radio
+            // Only fall back to a real radio if the single click above did not check it.
+            // A second click would toggle the choice back off.
             const innerRadio = chosenEl.querySelector<HTMLInputElement>('input[type="radio"]');
-            if (innerRadio) {
+            if (innerRadio && !innerRadio.checked) {
               setCheckboxOrRadio(innerRadio, true);
-            } else if (container) {
-              // Find matching radio in container if present by value or label
-              const containerRadios = Array.from(container.querySelectorAll<HTMLInputElement>('input[type="radio"]'));
-              const targetRadio = containerRadios.find((r) => {
-                const val = (r.value || '').toLowerCase();
-                const rLabel = extractFieldLabel(r).toLowerCase();
-                return val === targetChoice || rLabel === targetChoice;
-              });
-              if (targetRadio) {
-                setCheckboxOrRadio(targetRadio, true);
-              }
             }
 
             const otherEl = chosenEl === el ? noEl : el;
@@ -259,7 +249,10 @@ export function handleAllRadioGroups(
 ): void {
   const allRadios = Array.from(rootElement.querySelectorAll<HTMLInputElement>('input[type="radio"]'));
   const standaloneRoleRadios = Array.from(rootElement.querySelectorAll<HTMLElement>('[role="radio"]')).filter(
-    (el) => !el.querySelector('input[type="radio"]') && !el.closest('label')?.querySelector('input[type="radio"]')
+    (el) =>
+      !el.querySelector('input[type="radio"]') &&
+      !el.closest('label')?.querySelector('input[type="radio"]') &&
+      !/^(yes|no)$/i.test((el.textContent || '').trim())
   );
 
   const allRadioCandidates: HTMLElement[] = [...allRadios, ...standaloneRoleRadios];
