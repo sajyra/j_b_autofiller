@@ -3,19 +3,98 @@ import { CandidateProfile, DEFAULT_PROFILE } from '../types/profile';
 const STORAGE_KEY = 'instapp_candidate_profiles';
 const ACTIVE_PROFILE_ID_KEY = 'instapp_active_profile_id';
 
-// Check if chrome.storage is available
-const isChromeStorageAvailable = (): boolean => {
+declare const browser: any;
+
+// Check if extension storage is available
+const isExtensionStorageAvailable = (): boolean => {
+  if (typeof browser !== 'undefined' && !!browser.storage && !!browser.storage.local) {
+    return true;
+  }
   return typeof chrome !== 'undefined' && !!chrome.storage && !!chrome.storage.local;
 };
+
+async function getStorageItem(key: string): Promise<any> {
+  if (typeof browser !== 'undefined' && browser.storage?.local?.get) {
+    const res = await browser.storage.local.get(key);
+    return res?.[key];
+  }
+  if (typeof chrome !== 'undefined' && !!chrome.storage?.local) {
+    return new Promise((resolve) => {
+      try {
+        let resolved = false;
+        const maybePromise: any = (chrome.storage.local as any).get(key, (res: any) => {
+          if (!resolved) {
+            resolved = true;
+            resolve(res?.[key]);
+          }
+        });
+        if (maybePromise && typeof maybePromise.then === 'function') {
+          maybePromise
+            .then((res: any) => {
+              if (!resolved) {
+                resolved = true;
+                resolve(res?.[key]);
+              }
+            })
+            .catch(() => {
+              if (!resolved) {
+                resolved = true;
+                resolve(undefined);
+              }
+            });
+        }
+      } catch {
+        resolve(undefined);
+      }
+    });
+  }
+  return undefined;
+}
+
+async function setStorageItem(items: Record<string, any>): Promise<void> {
+  if (typeof browser !== 'undefined' && browser.storage?.local?.set) {
+    await browser.storage.local.set(items);
+    return;
+  }
+  if (typeof chrome !== 'undefined' && !!chrome.storage?.local) {
+    return new Promise((resolve) => {
+      try {
+        let resolved = false;
+        const maybePromise: any = (chrome.storage.local as any).set(items, () => {
+          if (!resolved) {
+            resolved = true;
+            resolve();
+          }
+        });
+        if (maybePromise && typeof maybePromise.then === 'function') {
+          maybePromise
+            .then(() => {
+              if (!resolved) {
+                resolved = true;
+                resolve();
+              }
+            })
+            .catch(() => {
+              if (!resolved) {
+                resolved = true;
+                resolve();
+              }
+            });
+        }
+      } catch {
+        resolve();
+      }
+    });
+  }
+}
 
 /**
  * Get all saved profiles. Defaults to a single default profile if none exists.
  */
 export async function getAllProfiles(): Promise<CandidateProfile[]> {
   try {
-    if (isChromeStorageAvailable()) {
-      const result = await chrome.storage.local.get(STORAGE_KEY);
-      const profiles = result[STORAGE_KEY];
+    if (isExtensionStorageAvailable()) {
+      const profiles = await getStorageItem(STORAGE_KEY);
       if (Array.isArray(profiles) && profiles.length > 0) {
         return profiles;
       }
@@ -43,8 +122,8 @@ export async function getAllProfiles(): Promise<CandidateProfile[]> {
  */
 export async function saveAllProfiles(profiles: CandidateProfile[]): Promise<void> {
   try {
-    if (isChromeStorageAvailable()) {
-      await chrome.storage.local.set({ [STORAGE_KEY]: profiles });
+    if (isExtensionStorageAvailable()) {
+      await setStorageItem({ [STORAGE_KEY]: profiles });
     }
     if (typeof window !== 'undefined' && window.localStorage) {
       window.localStorage.setItem(STORAGE_KEY, JSON.stringify(profiles));
@@ -63,9 +142,8 @@ export async function getActiveProfile(): Promise<CandidateProfile> {
   let activeId: string | null = null;
 
   try {
-    if (isChromeStorageAvailable()) {
-      const result = await chrome.storage.local.get(ACTIVE_PROFILE_ID_KEY);
-      activeId = result[ACTIVE_PROFILE_ID_KEY];
+    if (isExtensionStorageAvailable()) {
+      activeId = await getStorageItem(ACTIVE_PROFILE_ID_KEY);
     } else if (typeof window !== 'undefined' && window.localStorage) {
       activeId = window.localStorage.getItem(ACTIVE_PROFILE_ID_KEY);
     }
@@ -102,8 +180,8 @@ export async function saveActiveProfile(profile: CandidateProfile): Promise<void
 
   await saveAllProfiles(profiles);
 
-  if (isChromeStorageAvailable()) {
-    await chrome.storage.local.set({ [ACTIVE_PROFILE_ID_KEY]: profile.id });
+  if (isExtensionStorageAvailable()) {
+    await setStorageItem({ [ACTIVE_PROFILE_ID_KEY]: profile.id });
   }
   if (typeof window !== 'undefined' && window.localStorage) {
     window.localStorage.setItem(ACTIVE_PROFILE_ID_KEY, profile.id);

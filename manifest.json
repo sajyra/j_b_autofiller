@@ -3,6 +3,12 @@
   "name": "Instapp - Job Application Autofiller",
   "version": "1.0.0",
   "description": "Lightning-fast, accurate job application autofiller for Ashby and Workday.",
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "instapp-autofiller@sajyra.github.io",
+      "strict_min_version": "109.0"
+    }
+  },
   "permissions": [
     "storage",
     "unlimitedStorage",
@@ -26,10 +32,13 @@
       "128": "icons/icon128.png"
     }
   },
-  "options_page": "options.html",
+  "options_ui": {
+    "page": "options.html",
+    "open_in_tab": true
+  },
   "background": {
-    "service_worker": "background.js",
-    "type": "module"
+    "scripts": ["background.js"],
+    "service_worker": "background.js"
   },
   "content_scripts": [
     {
@@ -40,3 +49,4 @@
     }
   ]
 }
+

@@ -7,6 +7,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build && vite build --config vite.content.config.ts",
+    "package": "web-ext build --source-dir dist --overwrite-dest",
     "test": "vitest run",
     "test:watch": "vitest"
   },
